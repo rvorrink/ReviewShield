@@ -154,6 +154,33 @@
   }
 
   /**
+   * Looks for the big header rating number ("4,6"-style leaf) near an
+   * element: within 5 ancestors and at most ~160px vertical distance, so a
+   * count inside the reviews list can't borrow the header's rating.
+   * Returns { rating, container } or null.
+   */
+  function findRatingNear(fromEl) {
+    try {
+      const fromTop = fromEl.getBoundingClientRect().top;
+      let ancestor = fromEl;
+      for (let up = 0; ancestor && up < 5; up++, ancestor = ancestor.parentElement) {
+        for (const el of ancestor.querySelectorAll('span, div')) {
+          if (el.childElementCount !== 0 || el.classList.contains(BADGE_CLASS)) continue;
+          const text = (el.textContent || '').trim();
+          if (text.length > 5 || !CFG.RATING_TEXT.test(text)) continue;
+          const parsed = P.parseLocalizedRating(text);
+          if (parsed === null) continue;
+          if (Math.abs(el.getBoundingClientRect().top - fromTop) > 160) continue;
+          return { rating: parsed, container: ancestor };
+        }
+      }
+    } catch (e) {
+      /* silent */
+    }
+    return null;
+  }
+
+  /**
    * Finds the official rating and total review count in the place panel
    * header, anchored on aria-labels and text patterns only. `bannerEl` may
    * be null (clean profiles without a removal banner).
@@ -165,66 +192,58 @@
       document.querySelector('[role="main"]') ||
       document.body;
 
-    // 1) Total review count. Sources, in order of preference:
-    //    a) aria-label "3.270 Rezensionen" / "3,270 reviews" (Overview header)
-    //    b) visible leaf text "1,356 reviews" (Reviews tab header)
-    //    c) visible leaf text "(3.270)" next to the stars (Overview header)
-    let countEl = null;
-    let count = null;
+    // 1) Collect total-review-count candidates in document order:
+    //    a) aria-label "3.270 Rezensionen" / "3,270 reviews" / "352 Berichte"
+    //    b) visible leaf text of the same shapes, or "(3.270)"
+    const candidates = [];
     for (const el of main.querySelectorAll('[aria-label]')) {
+      if (candidates.length >= 20) break;
       if (el.closest('.' + BADGE_CLASS) || overlapsBanner(el, bannerEl)) continue;
       const label = el.getAttribute('aria-label') || '';
       if (/Diffamierung|defamation/i.test(label)) continue;
       const m = label.match(CFG.REVIEW_COUNT_LABEL);
       if (!m) continue;
       const parsed = P.parseLocalizedCount(m[1]);
-      if (parsed) {
-        countEl = el;
-        count = parsed;
-        break;
-      }
+      if (parsed) candidates.push({ el, count: parsed });
     }
-    if (!countEl) {
-      for (const el of main.querySelectorAll('span, div')) {
-        if (el.childElementCount !== 0) continue;
-        if (el.closest('.' + BADGE_CLASS) || overlapsBanner(el, bannerEl)) continue;
-        const text = (el.textContent || '').trim();
-        if (!text || text.length > 40) continue;
-        const m = text.match(CFG.REVIEW_COUNT_LABEL) || text.match(CFG.REVIEW_COUNT_TEXT);
-        if (!m) continue;
-        const parsed = P.parseLocalizedCount(m[1]);
-        if (parsed) {
-          countEl = el;
-          count = parsed;
-          break;
-        }
-      }
+    for (const el of main.querySelectorAll('span, div')) {
+      if (candidates.length >= 20) break;
+      if (el.childElementCount !== 0) continue;
+      if (el.closest('.' + BADGE_CLASS) || overlapsBanner(el, bannerEl)) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 40) continue;
+      const m = text.match(CFG.REVIEW_COUNT_LABEL) || text.match(CFG.REVIEW_COUNT_TEXT);
+      if (!m) continue;
+      const parsed = P.parseLocalizedCount(m[1]);
+      if (parsed) candidates.push({ el, count: parsed });
     }
-    if (!countEl || !count) {
+    if (!candidates.length) {
       debug('review count not found');
       return null;
     }
 
-    // 2) Rating: prefer a "4,6"-style leaf node near the count element. The
-    //    header rating is a div in some layouts and a span in others.
+    // 2) Accept the first candidate that has the big header rating number
+    //    ("4,6"-style leaf) nearby: within a few ancestors AND vertically
+    //    close. Reviewer entries ("2 Rezensionen" under a reviewer's name)
+    //    have no such neighbor and are rejected, so the badge can neither
+    //    anchor to a review card nor compute with a reviewer's count.
+    let countEl = null;
+    let count = null;
     let rating = null;
     let ratingContainer = null;
-    let ancestor = countEl;
-    for (let up = 0; ancestor && up < 5 && rating === null; up++, ancestor = ancestor.parentElement) {
-      for (const el of ancestor.querySelectorAll('span, div')) {
-        if (el.childElementCount !== 0 || el.classList.contains(BADGE_CLASS)) continue;
-        const text = (el.textContent || '').trim();
-        if (text.length > 5 || !CFG.RATING_TEXT.test(text)) continue;
-        const parsed = P.parseLocalizedRating(text);
-        if (parsed !== null) {
-          rating = parsed;
-          ratingContainer = ancestor;
-          break;
-        }
+    for (const candidate of candidates) {
+      const near = findRatingNear(candidate.el);
+      if (near) {
+        countEl = candidate.el;
+        count = candidate.count;
+        rating = near.rating;
+        ratingContainer = near.container;
+        break;
       }
     }
-    // …fallback: the star widget's aria-label, e.g. "4,6 Sterne" / "4.6 stars".
-    if (rating === null) {
+    // Fallback for layouts whose rating exists only as a star-widget
+    // aria-label: use the first (header-most) candidate.
+    if (!countEl) {
       for (const el of main.querySelectorAll('[aria-label]')) {
         if (overlapsBanner(el, bannerEl)) continue;
         const m = (el.getAttribute('aria-label') || '').match(CFG.STARS_LABEL);
@@ -235,10 +254,12 @@
           break;
         }
       }
-    }
-    if (rating === null) {
-      debug('rating value not found near count element');
-      return null;
+      if (rating === null) {
+        debug('rating value not found near any count candidate');
+        return null;
+      }
+      countEl = candidates[0].el;
+      count = candidates[0].count;
     }
 
     // 3) The bar is inserted below the whole header block (histogram + score),
