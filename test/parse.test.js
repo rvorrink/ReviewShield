@@ -98,6 +98,43 @@ test('parseRemovalRange: returns null without a banner', () => {
   assert.equal(P.parseRemovalRange('2 bis 5 Sterne sind gut'), null);
 });
 
+// ---------------------------------------------------- word-form counts
+
+test('parseRemovalRange: English word-form range', () => {
+  const r = P.parseRemovalRange('Six to ten reviews removed due to defamation complaints.');
+  assert.deepEqual(r, { min: 6, max: 10, openEnded: false });
+});
+
+test('parseRemovalRange: English word-form singular', () => {
+  const r = P.parseRemovalRange('One review was removed due to a defamation complaint.');
+  assert.deepEqual(r, { min: 1, max: 1, openEnded: false });
+});
+
+test('parseRemovalRange: English hyphenated word-form range', () => {
+  const r = P.parseRemovalRange('Twenty-one to fifty reviews removed due to defamation complaints.');
+  assert.deepEqual(r, { min: 21, max: 50, openEnded: false });
+});
+
+test('parseRemovalRange: English word-form open-ended bucket', () => {
+  const r = P.parseRemovalRange('Over two hundred and fifty reviews removed due to defamation complaints.');
+  assert.deepEqual(r, { min: 251, max: 500, openEnded: true, base: 250 });
+});
+
+test('parseRemovalRange: German word-form range', () => {
+  const r = P.parseRemovalRange(
+    'Sechs bis zehn Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt'
+  );
+  assert.deepEqual(r, { min: 6, max: 10, openEnded: false });
+});
+
+test('parseRemovalRange: German word-form singular keeps banner intact', () => {
+  // "einer Beschwerde" sits inside the banner phrase and must not be rewritten
+  const r = P.parseRemovalRange(
+    'Eine Bewertung wurde aufgrund einer Beschwerde wegen Diffamierung entfernt'
+  );
+  assert.deepEqual(r, { min: 1, max: 1, openEnded: false });
+});
+
 // --------------------------------------------------------------- count parsing
 
 test('parseLocalizedCount handles German grouping', () => {

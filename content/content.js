@@ -747,7 +747,10 @@
         return;
       }
       if (!range) {
-        debug('banner present but range not parseable');
+        debug(
+          'banner present but range not parseable:',
+          domBanner && domBanner.text ? JSON.stringify(domBanner.text.slice(0, 200)) : '(cached verdict)'
+        );
         removeBadges();
         return;
       }
