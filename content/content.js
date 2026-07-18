@@ -393,11 +393,48 @@
     scan();
   }
 
+  /**
+   * Sizes the badge to the panel's text column: same left/right inset as the
+   * place title (h1), centered. The insertion container's own padding varies
+   * between Maps layouts, so this is measured, not hardcoded. Falls back to
+   * the CSS defaults when the measurements look implausible.
+   */
+  function alignBadgeWidth(badge) {
+    try {
+      const main = badge.closest('[role="main"]');
+      if (!main) return;
+      const title = main.querySelector('h1');
+      if (!title) return;
+      const mainRect = main.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      const inset = titleRect.left - mainRect.left;
+      if (!(inset > 0) || inset > mainRect.width / 3) return;
+      let width = Math.round(mainRect.width - 2 * inset);
+      const parentWidth = badge.parentElement ? badge.parentElement.clientWidth : 0;
+      if (parentWidth) width = Math.min(width, parentWidth);
+      if (width < 200) return;
+      badge.style.boxSizing = 'border-box';
+      badge.style.width = width + 'px';
+      badge.style.marginLeft = 'auto';
+      badge.style.marginRight = 'auto';
+    } catch (e) {
+      /* keep CSS defaults */
+    }
+  }
+
   /** Localized display of the removed-review range ("2–5", "1", "over 250"). */
   function formatRemovedRange(range) {
     if (range.openEnded) return translator.t('rangeOver', [String(range.base)]);
     if (range.min === range.max) return String(range.min);
     return range.min + '–' + range.max;
+  }
+
+  /** Localized unit phrase for the assumed star value: "1 star", "1,5 Sterne". */
+  function formatAssumedStars(value, lang) {
+    const s = Number.isInteger(value) ? String(value) : value.toFixed(1);
+    const num = lang === 'de' ? s.replace('.', ',') : s;
+    if (lang === 'de') return value === 1 ? '1 Stern' : num + ' Sterne';
+    return value === 1 ? '1 star' : num + ' stars';
   }
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -548,6 +585,7 @@
     badge.addEventListener('blur', hideTooltip);
 
     anchorEl.insertAdjacentElement('afterend', badge);
+    alignBadgeWidth(badge);
   }
 
   /** Shield-with-check only, for the clean-profile card. */
@@ -601,6 +639,7 @@
     badge.appendChild(text);
 
     anchorEl.insertAdjacentElement('afterend', badge);
+    alignBadgeWidth(badge);
   }
 
   // ------------------------------------------------------------------ scan
@@ -705,6 +744,7 @@
     textEl.textContent = text;
     badge.appendChild(textEl);
     info.headerEl.insertAdjacentElement('afterend', badge);
+    alignBadgeWidth(badge);
   }
 
   function renderCleanCard(info, key) {
@@ -725,7 +765,9 @@
   }
 
   function renderAdjustedBadge(info, key, range) {
-    const corrected = P.correctedRange(info.rating, info.count, range);
+    // Star value each removed review is assumed to have had (1 = harshest).
+    const starValue = Math.min(2.5, Math.max(1, parseFloat(settings.removedStarValue) || 1));
+    const corrected = P.correctedRange(info.rating, info.count, range, starValue);
     if (!corrected) {
       removeBadges();
       return;
@@ -733,18 +775,22 @@
 
     const lang = translator.lang;
     // Calculation mode: 'worst' uses the top of the removal range
-    // (corrected.low), 'conservative' the bottom (corrected.high). Both
-    // assume every removed review was 1-star.
+    // (corrected.low), 'conservative' the bottom (corrected.high).
     const mode = settings.calcMode === 'conservative' ? 'conservative' : 'worst';
     const value = mode === 'worst' ? corrected.low : corrected.high;
     const scoreText = P.formatRating(value, lang);
     const caption = translator.t('badgeCaption');
     const tooltip = translator.t(
       mode === 'worst' ? 'badgeTooltipWorst' : 'badgeTooltipConservative',
-      [formatRemovedRange(range), scoreText, P.formatRating(info.rating, lang)]
+      [
+        formatRemovedRange(range),
+        scoreText,
+        P.formatRating(info.rating, lang),
+        formatAssumedStars(starValue, lang),
+      ]
     );
     const fillPercent = Math.max(0, Math.min(100, (value / 5) * 100));
-    const label = scoreText + '|' + caption + '|' + mode;
+    const label = scoreText + '|' + caption + '|' + mode + '|' + starValue;
 
     // Idempotence: keep an existing, still-attached, up-to-date badge.
     const existing = document.querySelector('.' + BADGE_CLASS);
@@ -792,9 +838,13 @@
         /* silent */
       }
       // Safety net for renders the observer debounce might have coalesced away
-      // and for URL changes that don't mutate observed nodes.
+      // and for URL changes that don't mutate observed nodes. Also re-measures
+      // the badge width so panel resizes correct themselves.
       setInterval(() => {
-        if (!document.hidden) scan();
+        if (document.hidden) return;
+        scan();
+        const badge = document.querySelector('.' + BADGE_CLASS);
+        if (badge) alignBadgeWidth(badge);
       }, RESCAN_INTERVAL_MS);
     });
   });
