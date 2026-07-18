@@ -171,6 +171,21 @@ test('correctedRange stays within [1, 5] for the worst case', () => {
   assert.ok(r.low >= 1 && r.high <= 5);
 });
 
+test('correctedRating honors the assumed star value', () => {
+  // (4.6 * 100 + 2.5 * 5) / 105
+  const v = P.correctedRating(4.6, 100, 5, 2.5);
+  assert.ok(Math.abs(v - 472.5 / 105) < 1e-12);
+  assert.equal(P.correctedRating(4.6, 100, 5, 6), null);
+  assert.equal(P.correctedRating(4.6, 100, 5, NaN), null);
+});
+
+test('a higher assumed star value softens the correction', () => {
+  const harsh = P.correctedRange(4.6, 100, { min: 2, max: 5 }, 1);
+  const soft = P.correctedRange(4.6, 100, { min: 2, max: 5 }, 2.5);
+  assert.ok(soft.low > harsh.low && soft.high > harsh.high);
+  assert.ok(soft.low < soft.high);
+});
+
 // ------------------------------------------------------------------ formatting
 
 test('formatRating localizes the decimal separator', () => {

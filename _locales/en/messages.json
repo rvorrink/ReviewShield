@@ -4,7 +4,7 @@
     "description": "Extension name"
   },
   "appDesc": {
-    "message": "See through inflated ratings — removal-adjusted estimates for Google Maps profiles that had reviews removed as “defamation”.",
+    "message": "See more accurate Google Maps ratings with estimates adjusted for reviews removed as “defamation”.",
     "description": "Extension description (must stay under 132 characters for the Web Store)"
   },
   "badgeCaption": {
@@ -12,21 +12,23 @@
     "description": "Caption in the badge bar (deliberately says 'estimate', not 'rating')"
   },
   "badgeTooltipWorst": {
-    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. Worst-case estimate: assumes the top of that range and that every removed review was a 1-star rating. The average could then drop to $CORRECTED$ instead of $OFFICIAL$. Removed reviews aren't necessarily all 1-star — this is an estimate, not a verified rating.",
+    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. This worst-case estimate assumes the top of that range and treats each removed review as a rating of $ASSUMED$. The average could then drop to $CORRECTED$ instead of $OFFICIAL$. The actual removed ratings are unknown, so this is an estimate and not a verified rating.",
     "description": "Tooltip in worst-case calculation mode",
     "placeholders": {
       "removed": { "content": "$1", "example": "2–5" },
       "corrected": { "content": "$2", "example": "4.3" },
-      "official": { "content": "$3", "example": "4.6" }
+      "official": { "content": "$3", "example": "4.6" },
+      "assumed": { "content": "$4", "example": "1 star" }
     }
   },
   "badgeTooltipConservative": {
-    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. Conservative estimate: assumes the bottom of that range and that every removed review was a 1-star rating. The average would then be $CORRECTED$ instead of $OFFICIAL$. Removed reviews aren't necessarily all 1-star — this is an estimate, not a verified rating.",
+    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. This conservative estimate assumes the bottom of that range and treats each removed review as a rating of $ASSUMED$. The average would then be $CORRECTED$ instead of $OFFICIAL$. The actual removed ratings are unknown, so this is an estimate and not a verified rating.",
     "description": "Tooltip in conservative calculation mode",
     "placeholders": {
       "removed": { "content": "$1", "example": "2–5" },
       "corrected": { "content": "$2", "example": "4.5" },
-      "official": { "content": "$3", "example": "4.6" }
+      "official": { "content": "$3", "example": "4.6" },
+      "assumed": { "content": "$4", "example": "1 star" }
     }
   },
   "checkingText": {
@@ -51,7 +53,13 @@
     "message": "Conservative"
   },
   "popupCalcHint": {
-    "message": "Both modes assume every removed review was a 1-star rating — in reality that may not be true. Worst case uses the highest number in Google's reported range, conservative the lowest."
+    "message": "Both modes use the removed-review star value set below. Worst case takes the highest number in Google's reported range, conservative takes the lowest."
+  },
+  "popupRemovedValue": {
+    "message": "Removed reviews count as"
+  },
+  "popupRemovedValueHint": {
+    "message": "1 star is the harshest assumption. Higher values soften the estimate, because the actual star ratings of removed reviews are unknown."
   },
   "rangeOver": {
     "message": "over $N$",
@@ -85,6 +93,6 @@
     "message": "How it works"
   },
   "popupMethodText": {
-    "message": "Google Maps discloses when reviews were removed from a business profile after defamation complaints, but only as a range (e.g. “2 to 5”). ReviewShield recalculates the average as if every removed review had been a 1-star rating, using either the top of the range (worst case) or the bottom (conservative). Removed reviews aren't necessarily all 1-star, so the result is an estimate. Profiles without reported removals get a clean bill instead. Everything runs locally in your browser: no external requests, no analytics, no data collection."
+    "message": "Google Maps shows when reviews were removed from a business profile after defamation complaints, but only as a range (e.g. “2 to 5”). ReviewShield recalculates the average by treating every removed review as having the star value you set, using either the top of the range (worst case) or the bottom (conservative). The actual removed ratings are unknown, so the result is an estimate. Profiles without reported removals get a clean bill instead. Everything runs locally in your browser: no external requests, no analytics, no data collection."
   }
 }

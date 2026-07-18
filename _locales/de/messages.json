@@ -4,7 +4,7 @@
     "description": "Extension name"
   },
   "appDesc": {
-    "message": "Durchschaut geschönte Sterne: bereinigte Schätzwerte für Maps-Profile, deren Bewertungen als „Diffamierung“ entfernt wurden.",
+    "message": "Genauere Google-Maps-Bewertungen: Schätzwerte, bereinigt um Rezensionen, die als „Diffamierung“ entfernt wurden.",
     "description": "Extension description (muss unter 132 Zeichen bleiben für den Web Store)"
   },
   "badgeCaption": {
@@ -12,21 +12,23 @@
     "description": "Untertitel im Badge-Balken (bewusst 'Schätzwert', nicht 'Bewertung')"
   },
   "badgeTooltipWorst": {
-    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Worst-Case-Schätzung: nimmt das obere Ende der Spanne an und dass jede entfernte Bewertung 1 Stern hatte. Der Durchschnitt könnte dann auf $CORRECTED$ statt $OFFICIAL$ sinken. Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen — dies ist eine Schätzung, keine verifizierte Bewertung.",
+    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Diese Worst-Case-Schätzung nimmt das obere Ende der Spanne an und geht davon aus, dass jede entfernte Bewertung $ASSUMED$ hatte. Der Durchschnitt könnte dann auf $CORRECTED$ statt $OFFICIAL$ sinken. Die tatsächlich entfernten Bewertungen sind unbekannt, daher ist dies eine Schätzung und keine verifizierte Bewertung.",
     "description": "Tooltip im Worst-Case-Modus",
     "placeholders": {
       "removed": { "content": "$1", "example": "2–5" },
       "corrected": { "content": "$2", "example": "4,3" },
-      "official": { "content": "$3", "example": "4,6" }
+      "official": { "content": "$3", "example": "4,6" },
+      "assumed": { "content": "$4", "example": "1 Stern" }
     }
   },
   "badgeTooltipConservative": {
-    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Konservative Schätzung: nimmt das untere Ende der Spanne an und dass jede entfernte Bewertung 1 Stern hatte. Der Durchschnitt läge dann bei $CORRECTED$ statt $OFFICIAL$. Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen — dies ist eine Schätzung, keine verifizierte Bewertung.",
+    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Diese konservative Schätzung nimmt das untere Ende der Spanne an und geht davon aus, dass jede entfernte Bewertung $ASSUMED$ hatte. Der Durchschnitt läge dann bei $CORRECTED$ statt $OFFICIAL$. Die tatsächlich entfernten Bewertungen sind unbekannt, daher ist dies eine Schätzung und keine verifizierte Bewertung.",
     "description": "Tooltip im konservativen Modus",
     "placeholders": {
       "removed": { "content": "$1", "example": "2–5" },
       "corrected": { "content": "$2", "example": "4,5" },
-      "official": { "content": "$3", "example": "4,6" }
+      "official": { "content": "$3", "example": "4,6" },
+      "assumed": { "content": "$4", "example": "1 Stern" }
     }
   },
   "checkingText": {
@@ -51,7 +53,13 @@
     "message": "Konservativ"
   },
   "popupCalcHint": {
-    "message": "Beide Modi nehmen an, dass jede entfernte Bewertung 1 Stern hatte — das muss in Wirklichkeit nicht stimmen. Worst Case nutzt die höchste Zahl der von Google gemeldeten Spanne, konservativ die niedrigste."
+    "message": "Beide Modi nutzen den unten eingestellten Sternwert für entfernte Bewertungen. Worst Case nimmt die höchste Zahl der von Google gemeldeten Spanne, konservativ die niedrigste."
+  },
+  "popupRemovedValue": {
+    "message": "Entfernte Bewertungen zählen als"
+  },
+  "popupRemovedValueHint": {
+    "message": "1 Stern ist die strengste Annahme. Höhere Werte machen die Schätzung milder, denn die tatsächlichen Sterne der entfernten Bewertungen sind unbekannt."
   },
   "rangeOver": {
     "message": "über $N$",
@@ -85,6 +93,6 @@
     "message": "So funktioniert es"
   },
   "popupMethodText": {
-    "message": "Google Maps zeigt an, wenn Bewertungen eines Unternehmensprofils nach Diffamierungsbeschwerden entfernt wurden — allerdings nur als Spanne (z. B. „2 bis 5“). ReviewShield berechnet den Durchschnitt neu, als wäre jede entfernte Bewertung eine 1-Stern-Bewertung gewesen — wahlweise mit dem oberen Ende der Spanne (Worst Case) oder dem unteren (konservativ). Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen, das Ergebnis ist also eine Schätzung. Profile ohne gemeldete Löschungen bekommen stattdessen einen sauberen Vermerk. Alles läuft lokal im Browser: keine externen Anfragen, keine Analyse, keine Datensammlung."
+    "message": "Google Maps zeigt an, wenn Bewertungen eines Unternehmensprofils nach Diffamierungsbeschwerden entfernt wurden, allerdings nur als Spanne (z. B. „2 bis 5“). ReviewShield berechnet den Durchschnitt neu und behandelt jede entfernte Bewertung so, als hätte sie den eingestellten Sternwert, wahlweise mit dem oberen Ende der Spanne (Worst Case) oder dem unteren (konservativ). Die tatsächlich entfernten Bewertungen sind unbekannt, das Ergebnis ist also eine Schätzung. Profile ohne gemeldete Löschungen bekommen stattdessen einen sauberen Vermerk. Alles läuft lokal im Browser: keine externen Anfragen, keine Analyse, keine Datensammlung."
   }
 }

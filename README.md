@@ -24,11 +24,12 @@ override in the popup.
 - Reads the official average rating and total review count from the panel
   header (handles German and English number formatting: `3.270` vs `3,270`,
   decimal comma vs point).
-- Computes the corrected rating with `(rating · N + 1 · R) / (N + R)`, where
+- Computes the corrected rating with `(rating · N + S · R) / (N + R)`, where
   `R` depends on the calculation mode: **worst case** (default) uses the top
   of the removal range (R = 100 for "51 to 100"), **conservative** uses the
-  bottom (R = 51). Both modes assume every removed review was 1-star — which
-  isn't necessarily true; the tooltip and popup say so explicitly.
+  bottom (R = 51). `S` is the star value assumed for removed reviews,
+  adjustable from 1★ (harshest, default) to 2.5★. The actual removed ratings
+  are unknown; the tooltip and popup say so explicitly.
 - Injects an emerald-gradient bar below the rating header: star+shield mark,
   a fractional star row filled to the adjusted score, an uppercase
   "Removal-adjusted estimate" label, and the score. Hover or keyboard/tap
@@ -47,9 +48,10 @@ override in the popup.
   without it, nothing is shown), and it aborts immediately if the user
   navigates to another place.
 - Popup settings: on/off toggle, language override (Auto / Deutsch / English),
-  calculation mode (worst case / conservative), worst-case max for the open
-  "over 250" bucket, and a short methodology explanation. Persisted via
-  `chrome.storage.sync`.
+  calculation mode (worst case / conservative), a slider for the assumed
+  removed-review star value (1★ to 2.5★), a slider for the worst-case max of
+  the open "over 250" bucket, and a short methodology explanation. Persisted
+  via `chrome.storage.sync`.
 - **Privacy:** everything runs locally on the page. No network requests, no
   analytics, no data collection. The only permission is `storage`.
 
