@@ -1,0 +1,90 @@
+{
+  "appName": {
+    "message": "ReviewShield",
+    "description": "Extension name"
+  },
+  "appDesc": {
+    "message": "Durchschaut geschönte Sterne: bereinigte Schätzwerte für Maps-Profile, deren Bewertungen als „Diffamierung“ entfernt wurden.",
+    "description": "Extension description (muss unter 132 Zeichen bleiben für den Web Store)"
+  },
+  "badgeCaption": {
+    "message": "Bereinigter Schätzwert",
+    "description": "Untertitel im Badge-Balken (bewusst 'Schätzwert', nicht 'Bewertung')"
+  },
+  "badgeTooltipWorst": {
+    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Worst-Case-Schätzung: nimmt das obere Ende der Spanne an und dass jede entfernte Bewertung 1 Stern hatte. Der Durchschnitt könnte dann auf $CORRECTED$ statt $OFFICIAL$ sinken. Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen — dies ist eine Schätzung, keine verifizierte Bewertung.",
+    "description": "Tooltip im Worst-Case-Modus",
+    "placeholders": {
+      "removed": { "content": "$1", "example": "2–5" },
+      "corrected": { "content": "$2", "example": "4,3" },
+      "official": { "content": "$3", "example": "4,6" }
+    }
+  },
+  "badgeTooltipConservative": {
+    "message": "Laut Google wurden bei diesem Profil $REMOVED$ Bewertung(en) aufgrund von Beschwerden wegen Diffamierung entfernt. Konservative Schätzung: nimmt das untere Ende der Spanne an und dass jede entfernte Bewertung 1 Stern hatte. Der Durchschnitt läge dann bei $CORRECTED$ statt $OFFICIAL$. Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen — dies ist eine Schätzung, keine verifizierte Bewertung.",
+    "description": "Tooltip im konservativen Modus",
+    "placeholders": {
+      "removed": { "content": "$1", "example": "2–5" },
+      "corrected": { "content": "$2", "example": "4,5" },
+      "official": { "content": "$3", "example": "4,6" }
+    }
+  },
+  "checkingText": {
+    "message": "Bewertungsstatus wird geprüft…",
+    "description": "Neutraler Zustand während der Reviews-Tab geprüft wird"
+  },
+  "cleanTitle": {
+    "message": "Hier gibt es nichts zu bereinigen",
+    "description": "Titel der Karte für saubere Profile"
+  },
+  "cleanCaption": {
+    "message": "Google meldet keine wegen Diffamierung entfernten Bewertungen — Respekt fürs Stehenlassen ehrlicher Kritik.",
+    "description": "Untertitel der Karte für saubere Profile"
+  },
+  "popupCalcMode": {
+    "message": "Berechnung"
+  },
+  "calcWorst": {
+    "message": "Worst Case"
+  },
+  "calcConservative": {
+    "message": "Konservativ"
+  },
+  "popupCalcHint": {
+    "message": "Beide Modi nehmen an, dass jede entfernte Bewertung 1 Stern hatte — das muss in Wirklichkeit nicht stimmen. Worst Case nutzt die höchste Zahl der von Google gemeldeten Spanne, konservativ die niedrigste."
+  },
+  "rangeOver": {
+    "message": "über $N$",
+    "description": "Offene Obergrenze, z. B. 'über 250'",
+    "placeholders": {
+      "n": { "content": "$1", "example": "250" }
+    }
+  },
+  "popupEnabled": {
+    "message": "Auf Google Maps aktiviert"
+  },
+  "popupLanguage": {
+    "message": "Sprache"
+  },
+  "langAuto": {
+    "message": "Automatisch (Browsersprache)"
+  },
+  "langDe": {
+    "message": "Deutsch"
+  },
+  "langEn": {
+    "message": "English"
+  },
+  "popupWorstCase": {
+    "message": "Worst Case für „über 250“"
+  },
+  "popupWorstCaseHint": {
+    "message": "Angenommene Obergrenze, wenn Google nur meldet, dass über 250 Bewertungen entfernt wurden."
+  },
+  "popupMethodTitle": {
+    "message": "So funktioniert es"
+  },
+  "popupMethodText": {
+    "message": "Google Maps zeigt an, wenn Bewertungen eines Unternehmensprofils nach Diffamierungsbeschwerden entfernt wurden — allerdings nur als Spanne (z. B. „2 bis 5“). ReviewShield berechnet den Durchschnitt neu, als wäre jede entfernte Bewertung eine 1-Stern-Bewertung gewesen — wahlweise mit dem oberen Ende der Spanne (Worst Case) oder dem unteren (konservativ). Entfernte Bewertungen sind nicht zwangsläufig 1-Stern-Bewertungen, das Ergebnis ist also eine Schätzung. Profile ohne gemeldete Löschungen bekommen stattdessen einen sauberen Vermerk. Alles läuft lokal im Browser: keine externen Anfragen, keine Analyse, keine Datensammlung."
+  }
+}

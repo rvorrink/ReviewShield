@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <svg class="logo" viewBox="0 0 128 128" aria-hidden="true">
+        <defs>
+          <mask id="pp-mask" maskUnits="userSpaceOnUse" x="-20" y="-20" width="168" height="168">
+            <rect x="-20" y="-20" width="168" height="168" fill="#fff" />
+            <path d="M94 66 C100.5 70.6 108.1 73.6 116.5 74.6 C118.4 74.8 119.6 76.3 119.6 78.2 L119.6 96 C119.6 111.6 109.6 122.4 94.6 127.4 Q94 127.6 93.4 127.4 C78.4 122.4 68.4 111.6 68.4 96 L68.4 78.2 C68.4 76.3 69.6 74.8 71.5 74.6 C79.9 73.6 87.5 70.6 94 66 Z" fill="#000" stroke="#000" stroke-width="12" />
+          </mask>
+        </defs>
+        <g transform="translate(-6,-7)">
+          <g mask="url(#pp-mask)">
+            <path d="M64 24.6 L74.1 47.3 Q75.1 49.7 77.6 50.2 L102.1 54.3 Q106 55 104 58.5 L86.6 76.8 Q84.8 78.8 85.4 81.4 L90.6 106.2 Q91.2 109.1 87.3 107.3 L65.4 96.5 Q64 95.8 62.6 96.5 L40.7 107.3 Q36.8 109.1 37.4 106.2 L42.6 81.4 Q43.2 78.8 41.4 76.8 L24 58.5 Q22 55 25.9 54.3 L50.4 50.2 Q52.9 49.7 53.9 47.3 Z" fill="#FFFFFF" transform="translate(-2,-8.85)" />
+          </g>
+          <path d="M94 66 C100.5 70.6 108.1 73.6 116.5 74.6 C118.4 74.8 119.6 76.3 119.6 78.2 L119.6 96 C119.6 111.6 109.6 122.4 94.6 127.4 Q94 127.6 93.4 127.4 C78.4 122.4 68.4 111.6 68.4 96 L68.4 78.2 C68.4 76.3 69.6 74.8 71.5 74.6 C79.9 73.6 87.5 70.6 94 66 Z" fill="#FFFFFF" />
+          <path d="M82 96.5 L91 105.5 L107 85.5" fill="none" stroke="#0B4A34" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
+      </svg>
+      <div class="header-text">
+        <h1 data-i18n="appName"></h1>
+        <span class="tagline" data-i18n="badgeCaption"></span>
+      </div>
+    </header>
+
+    <main>
+      <label class="row">
+        <span class="row-label" data-i18n="popupEnabled"></span>
+        <span class="switch">
+          <input type="checkbox" id="enabled" />
+          <span class="slider" aria-hidden="true"></span>
+        </span>
+      </label>
+
+      <label class="row">
+        <span class="row-label" data-i18n="popupLanguage"></span>
+        <select id="language">
+          <option value="auto" data-i18n="langAuto"></option>
+          <option value="de" data-i18n="langDe"></option>
+          <option value="en" data-i18n="langEn"></option>
+        </select>
+      </label>
+
+      <div class="row column">
+        <span class="row-label" data-i18n="popupCalcMode"></span>
+        <div class="segmented" role="radiogroup" aria-labelledby="calc-mode-label">
+          <input type="radio" name="calcMode" id="calc-worst" value="worst" />
+          <label for="calc-worst" data-i18n="calcWorst"></label>
+          <input type="radio" name="calcMode" id="calc-conservative" value="conservative" />
+          <label for="calc-conservative" data-i18n="calcConservative"></label>
+          <span class="segmented-thumb" aria-hidden="true"></span>
+        </div>
+        <small data-i18n="popupCalcHint"></small>
+      </div>
+
+      <label class="row column">
+        <span class="row-label" data-i18n="popupWorstCase"></span>
+        <input type="number" id="worstCaseMax" min="251" max="100000" step="1" />
+        <small data-i18n="popupWorstCaseHint"></small>
+      </label>
+
+      <section class="method">
+        <h2 data-i18n="popupMethodTitle"></h2>
+        <p data-i18n="popupMethodText"></p>
+      </section>
+    </main>
+
+    <script src="../lib/config.js"></script>
+    <script src="../lib/i18n.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

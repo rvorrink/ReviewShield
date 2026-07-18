@@ -1,0 +1,90 @@
+{
+  "appName": {
+    "message": "ReviewShield",
+    "description": "Extension name"
+  },
+  "appDesc": {
+    "message": "See through inflated ratings — removal-adjusted estimates for Google Maps profiles that had reviews removed as “defamation”.",
+    "description": "Extension description (must stay under 132 characters for the Web Store)"
+  },
+  "badgeCaption": {
+    "message": "Removal-adjusted estimate",
+    "description": "Caption in the badge bar (deliberately says 'estimate', not 'rating')"
+  },
+  "badgeTooltipWorst": {
+    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. Worst-case estimate: assumes the top of that range and that every removed review was a 1-star rating. The average could then drop to $CORRECTED$ instead of $OFFICIAL$. Removed reviews aren't necessarily all 1-star — this is an estimate, not a verified rating.",
+    "description": "Tooltip in worst-case calculation mode",
+    "placeholders": {
+      "removed": { "content": "$1", "example": "2–5" },
+      "corrected": { "content": "$2", "example": "4.3" },
+      "official": { "content": "$3", "example": "4.6" }
+    }
+  },
+  "badgeTooltipConservative": {
+    "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. Conservative estimate: assumes the bottom of that range and that every removed review was a 1-star rating. The average would then be $CORRECTED$ instead of $OFFICIAL$. Removed reviews aren't necessarily all 1-star — this is an estimate, not a verified rating.",
+    "description": "Tooltip in conservative calculation mode",
+    "placeholders": {
+      "removed": { "content": "$1", "example": "2–5" },
+      "corrected": { "content": "$2", "example": "4.5" },
+      "official": { "content": "$3", "example": "4.6" }
+    }
+  },
+  "checkingText": {
+    "message": "Checking review status…",
+    "description": "Neutral state while the Reviews tab is probed"
+  },
+  "cleanTitle": {
+    "message": "Nothing to adjust here",
+    "description": "Title of the clean-profile card"
+  },
+  "cleanCaption": {
+    "message": "No defamation-based review removals reported by Google — respect for letting honest feedback stand.",
+    "description": "Caption of the clean-profile card"
+  },
+  "popupCalcMode": {
+    "message": "Calculation"
+  },
+  "calcWorst": {
+    "message": "Worst case"
+  },
+  "calcConservative": {
+    "message": "Conservative"
+  },
+  "popupCalcHint": {
+    "message": "Both modes assume every removed review was a 1-star rating — in reality that may not be true. Worst case uses the highest number in Google's reported range, conservative the lowest."
+  },
+  "rangeOver": {
+    "message": "over $N$",
+    "description": "Open-ended removal bucket, e.g. 'over 250'",
+    "placeholders": {
+      "n": { "content": "$1", "example": "250" }
+    }
+  },
+  "popupEnabled": {
+    "message": "Enabled on Google Maps"
+  },
+  "popupLanguage": {
+    "message": "Language"
+  },
+  "langAuto": {
+    "message": "Auto (browser language)"
+  },
+  "langDe": {
+    "message": "Deutsch"
+  },
+  "langEn": {
+    "message": "English"
+  },
+  "popupWorstCase": {
+    "message": "Worst case for “over 250”"
+  },
+  "popupWorstCaseHint": {
+    "message": "Upper bound assumed when Google only reports that over 250 reviews were removed."
+  },
+  "popupMethodTitle": {
+    "message": "How it works"
+  },
+  "popupMethodText": {
+    "message": "Google Maps discloses when reviews were removed from a business profile after defamation complaints, but only as a range (e.g. “2 to 5”). ReviewShield recalculates the average as if every removed review had been a 1-star rating, using either the top of the range (worst case) or the bottom (conservative). Removed reviews aren't necessarily all 1-star, so the result is an estimate. Profiles without reported removals get a clean bill instead. Everything runs locally in your browser: no external requests, no analytics, no data collection."
+  }
+}

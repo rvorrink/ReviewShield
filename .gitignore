@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Packaging output (zips built for store upload)
+/dist/
+*.zip
+
+# Editor/IDE
+.vscode/
+.idea/

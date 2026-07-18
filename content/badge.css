@@ -1,0 +1,215 @@
+/* RealReview / EchteSterne — full-width "removal-adjusted rating" bar.
+   Deep green gradient pill with a soft glow, inserted below the rating
+   header block. No Google class names used. */
+
+.realreview-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px 6px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background-image:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 50%),
+    linear-gradient(135deg, #0e6b4a 0%, #0b4a34 55%, #082f22 100%);
+  color: #ffffff;
+  font-family: Roboto, Arial, sans-serif;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 2px 10px rgba(6, 78, 59, 0.3);
+  cursor: help;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.realreview-badge:hover,
+.realreview-badge:focus-visible {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 3px 14px rgba(6, 78, 59, 0.45);
+  outline: none;
+}
+
+/* Star-and-shield icon: single SVG at a fixed integer size, no filters. */
+.realreview-badge .rr-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
+.realreview-badge .rr-icon svg {
+  display: block;
+  width: 48px;
+  height: 48px;
+}
+
+.realreview-badge .rr-divider {
+  align-self: stretch;
+  flex-shrink: 0;
+  width: 1px;
+  margin: 2px 0;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Middle section: star row with the caption micro-label underneath.
+   align-items: flex-start keeps the star row content-sized — if it
+   stretched, the percentage fill overlay would cover all five stars. */
+.realreview-badge .rr-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+/* Fractional star row: dim base layer + white overlay clipped to the score. */
+.realreview-badge .rr-stars {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.realreview-badge .rr-stars-bg {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.realreview-badge .rr-stars-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: #ffffff;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.4);
+}
+
+.realreview-badge .rr-score {
+  flex-shrink: 0;
+  font-size: 39px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.realreview-badge .rr-caption {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+}
+
+.realreview-badge .rr-info {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.6px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1;
+}
+
+/* Clean-profile card: deliberately quiet — light emerald tint instead of the
+   full gradient, since most profiles have no reported removals. */
+.realreview-badge.rr-clean {
+  gap: 12px;
+  background-image: none;
+  background-color: #f2f8f5;
+  border: 1px solid #d4e6dd;
+  color: #0b4a34;
+  box-shadow: none;
+  cursor: default;
+}
+
+.realreview-badge.rr-clean:hover,
+.realreview-badge.rr-clean:focus-visible {
+  box-shadow: none;
+}
+
+.realreview-badge .rr-clean-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.realreview-badge .rr-clean-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+
+.realreview-badge .rr-clean-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0b4a34;
+  line-height: 1.2;
+}
+
+.realreview-badge .rr-clean-caption {
+  font-size: 11px;
+  font-weight: 400;
+  color: #3f6354;
+  line-height: 1.35;
+}
+
+/* Neutral "checking…" state while the Reviews tab is probed. */
+.realreview-badge.rr-checking {
+  gap: 8px;
+  padding: 8px 14px;
+  background-image: none;
+  background-color: #f6f7f7;
+  border: 1px solid #e0e3e1;
+  color: #5f6b66;
+  box-shadow: none;
+  cursor: default;
+}
+
+.realreview-badge .rr-checking-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0e6b4a;
+  animation: rr-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes rr-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.realreview-badge .rr-checking-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Floating tooltip, appended to document.body so the Maps side panel can't
+   clip it. Positioned via JS (position: fixed). */
+.realreview-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  max-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  border-radius: 8px;
+  background: #111827;
+  color: #f9fafb;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
