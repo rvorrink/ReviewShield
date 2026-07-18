@@ -15,7 +15,7 @@
     "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. This worst-case estimate assumes the top of that range and treats each removed review as a rating of $ASSUMED$. The average could then drop to $CORRECTED$ instead of $OFFICIAL$. The actual removed ratings are unknown, so this is an estimate and not a verified rating.",
     "description": "Tooltip in worst-case calculation mode",
     "placeholders": {
-      "removed": { "content": "$1", "example": "2–5" },
+      "removed": { "content": "$1", "example": "2 to 5" },
       "corrected": { "content": "$2", "example": "4.3" },
       "official": { "content": "$3", "example": "4.6" },
       "assumed": { "content": "$4", "example": "1 star" }
@@ -25,7 +25,7 @@
     "message": "Google reports that $REMOVED$ review(s) were removed from this profile due to defamation complaints. This conservative estimate assumes the bottom of that range and treats each removed review as a rating of $ASSUMED$. The average would then be $CORRECTED$ instead of $OFFICIAL$. The actual removed ratings are unknown, so this is an estimate and not a verified rating.",
     "description": "Tooltip in conservative calculation mode",
     "placeholders": {
-      "removed": { "content": "$1", "example": "2–5" },
+      "removed": { "content": "$1", "example": "2 to 5" },
       "corrected": { "content": "$2", "example": "4.5" },
       "official": { "content": "$3", "example": "4.6" },
       "assumed": { "content": "$4", "example": "1 star" }

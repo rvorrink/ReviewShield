@@ -422,11 +422,12 @@
     }
   }
 
-  /** Localized display of the removed-review range ("2–5", "1", "over 250"). */
+  /** Localized display of the removed-review range ("2 to 5", "1", "over 250"). */
   function formatRemovedRange(range) {
     if (range.openEnded) return translator.t('rangeOver', [String(range.base)]);
     if (range.min === range.max) return String(range.min);
-    return range.min + '–' + range.max;
+    const sep = translator.lang === 'de' ? ' bis ' : ' to ';
+    return range.min + sep + range.max;
   }
 
   /** Localized unit phrase for the assumed star value: "1 star", "1,5 Sterne". */
