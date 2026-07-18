@@ -27,7 +27,7 @@
   function debug() {
     if (!DEBUG) return;
     try {
-      console.debug.apply(console, ['[RealReview]'].concat(Array.from(arguments)));
+      console.log.apply(console, ['[RealReview]'].concat(Array.from(arguments)));
     } catch (e) {
       /* silent */
     }
@@ -219,6 +219,23 @@
     }
     if (!candidates.length) {
       debug('review count not found');
+      if (DEBUG) {
+        const labels = [];
+        for (const el of main.querySelectorAll('[aria-label]')) {
+          const l = el.getAttribute('aria-label') || '';
+          if (/\d/.test(l) && l.length < 70) labels.push(l);
+          if (labels.length >= 25) break;
+        }
+        debug('digit aria-labels:', JSON.stringify(labels));
+        const texts = [];
+        for (const el of main.querySelectorAll('span, div')) {
+          if (el.childElementCount !== 0) continue;
+          const t = (el.textContent || '').trim();
+          if (t && t.length < 30 && /\d/.test(t)) texts.push(t);
+          if (texts.length >= 25) break;
+        }
+        debug('digit leaf texts:', JSON.stringify(texts));
+      }
       return null;
     }
 
