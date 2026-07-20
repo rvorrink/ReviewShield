@@ -320,6 +320,22 @@ the delayed appends on the tab still being Reviews (e.g. stamp the surface with 
 rendered for). Then re-verify F3a/F3b still pass for the right reason — if F3a fails after the
 fixture fix, that IS a real extension finding (report it, don't paper over it).
 
+### 7.5 Round 3 revision (2026-07-20): marker exclusivity fast path
+
+Field observation from extensive live testing: the banner region shows EITHER the
+"Reviews aren't verified" marker OR the removal disclosure — never both. Flagged venues do
+not render the marker at all. This revokes the round-2 F3a contract (marker + late banner),
+which modeled a DOM state that does not occur on real Maps.
+
+New contract: a stable marker (visible for `CLEAN_GRACE_MARKER_MS` = 400ms, with the
+banner check still running first on every poll tick) grants a fast clean verdict; entries
+without a marker still wait the full `CLEAN_GRACE_NO_MARKER_MS` = 1800ms. Defense in depth:
+a banner observed at ANY later time (e.g. the user opening Reviews themselves) overrides a
+cached clean verdict in scan(). Tests: F3a is now the fast-path speed test; F3c covers the
+clean-override; F3b (late banner, no marker) is unchanged. The fixture models the exclusivity
+too: flagged venues render no marker (B8 exposed that the old both-at-once fixture default
+would manufacture exactly the impossible DOM state the fast path assumes away).
+
 ## 8. Ground rules
 
 - Deterministic first: every scenario must pass or fail identically across 3 consecutive runs

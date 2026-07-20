@@ -122,7 +122,9 @@
       }
     };
     add(venue.entriesDelayMs, () => { for (let i = 0; i < 2; i++) { const entry = document.createElement('div'); entry.setAttribute('aria-label', (i ? '1 ' : '5 ') + labels(venue.lang).stars); entry.textContent = 'Review entry'; surface.append(entry); } });
-    add(venue.metaDelayMs, () => { const meta = document.createElement('div'); meta.textContent = labels(venue.lang).meta; surface.append(meta); });
+    // Real Maps shows EITHER the "aren't verified" marker OR the removal
+    // disclosure, never both (field-observed): flagged venues get no marker.
+    if (!venue.flagged) add(venue.metaDelayMs, () => { const meta = document.createElement('div'); meta.textContent = labels(venue.lang).meta; surface.append(meta); });
     if (venue.flagged) add(venue.bannerDelayMs, () => { const banner = document.createElement('div'); banner.textContent = venue.bannerText || (venue.lang === 'de' ? 'Es wurden 2 bis 5 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt' : '2 to 5 reviews removed due to defamation complaints'); surface.append(banner); });
   }
 

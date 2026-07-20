@@ -457,13 +457,17 @@
   const PROBE_TIMEOUT_MS = 6000; // base deadline — extends when content arrives late
   const PROBE_HARD_TIMEOUT_MS = 12000; // absolute ceiling regardless of extensions
   const PROBE_POLL_MS = 200;
-  // The reviews list — and even the banner region's marker line ("Reviews
-  // aren't verified") — can render well before the disclosure banner itself
-  // (observed: banner more than 1s after the marker). A clean verdict
-  // therefore always waits a full banner-arrival grace after the surface
-  // loads; the marker is only a "surface has rendered" signal, never proof
-  // that no banner is coming.
-  const CLEAN_GRACE_MS = 1800;
+  // Field observation (extensive live testing, 2026-07): the banner region
+  // shows EITHER the generic marker line ("Reviews aren't verified") OR the
+  // removal disclosure — never both. A visible marker is therefore positive
+  // evidence of a clean profile and only needs a short stability window
+  // (during which every poll keeps checking for the banner first). Entries
+  // without a marker prove nothing about the banner region, so they wait
+  // out the full banner-arrival grace. Defense in depth: a banner seen at
+  // any later time (e.g. the user opening Reviews) always overrides a
+  // cached clean verdict in scan(), so a misjudged fast-clean self-corrects.
+  const CLEAN_GRACE_MARKER_MS = 400;
+  const CLEAN_GRACE_NO_MARKER_MS = 1800;
   // A failed switch-back (all in-probe retries swallowed) keeps retrying in
   // the background for a bounded window, driven by the regular scan ticks.
   const RETURN_RECOVERY_MS = 10000;
@@ -628,8 +632,9 @@
   /**
    * Polls the DOM until a verdict emerges:
    * - banner found → flagged (or unknown if its range doesn't parse)
-   * - Reviews tab VERIFIABLY SELECTED + surface rendered (entries or the
-   *   banner-region marker) + full banner-arrival grace → clean
+   * - Reviews tab VERIFIABLY SELECTED + banner-region marker stable for a
+   *   short window → clean (marker and banner are mutually exclusive);
+   *   entries without a marker need the full banner-arrival grace instead
    * - user navigated to another place → aborted
    * - timeout without a confident signal → unknown (never guess clean)
    *
@@ -644,6 +649,7 @@
     const hardDeadline = startedAt + PROBE_HARD_TIMEOUT_MS;
     let deadline = startedAt + PROBE_TIMEOUT_MS;
     let contentLoadedAt = 0;
+    let metaSeenAt = 0;
     let panelMismatchAt = 0;
     while (Date.now() < deadline) {
       if (probeState.generation !== probeGeneration) return { status: 'cancelled' };
@@ -655,6 +661,7 @@
         if (!panelMismatchAt) panelMismatchAt = Date.now();
         if (Date.now() - panelMismatchAt < PANEL_MISMATCH_GRACE_MS) {
           contentLoadedAt = 0;
+          metaSeenAt = 0;
           await sleep(PROBE_POLL_MS);
           continue;
         }
@@ -681,6 +688,7 @@
         }
         // Wrong surface: nothing seen here may count toward "clean".
         contentLoadedAt = 0;
+        metaSeenAt = 0;
         if (probeState.reclicks < 3 && Date.now() - startedAt > (probeState.reclicks + 1) * 600) {
           const tab = findTabButton(REVIEWS_TAB_LABEL, root);
           if (tab) {
@@ -694,11 +702,12 @@
           probeState.sawSelected = true;
           debug('probe: reviews tab selected after', Date.now() - startedAt, 'ms');
         }
-        // Two independent "the reviews surface has rendered" signals: review
-        // entries, and the banner-region marker line (which also covers
-        // venues with fewer reviews than the entries threshold). Either one
-        // only STARTS the clean grace clock — the banner can render later
-        // than both, so clean always waits the full grace.
+        // Two "the reviews surface has rendered" signals with different
+        // evidential weight: the banner-region marker line is POSITIVE
+        // evidence of a clean profile (marker and banner are mutually
+        // exclusive) and needs only a short stability window; review
+        // entries alone say nothing about the banner region and must wait
+        // out the full banner-arrival grace.
         const entriesOk = reviewsContentLoaded(root);
         const metaOk = reviewsMetaVisible(root);
         if (entriesOk || metaOk) {
@@ -712,11 +721,13 @@
             // arrival, not from probe start (capped by the hard ceiling).
             deadline = Math.min(
               hardDeadline,
-              Math.max(deadline, contentLoadedAt + CLEAN_GRACE_MS + 600)
+              Math.max(deadline, contentLoadedAt + CLEAN_GRACE_NO_MARKER_MS + 600)
             );
           }
+          if (metaOk && !metaSeenAt) metaSeenAt = Date.now();
           const waited = Date.now() - contentLoadedAt;
-          if (waited >= CLEAN_GRACE_MS) {
+          const markerStable = !!metaSeenAt && Date.now() - metaSeenAt >= CLEAN_GRACE_MARKER_MS;
+          if (markerStable || waited >= CLEAN_GRACE_NO_MARKER_MS) {
             debug(
               'probe: clean verdict after', Date.now() - startedAt,
               'ms; banner-region marker:', metaOk

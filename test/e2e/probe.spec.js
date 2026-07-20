@@ -486,11 +486,29 @@ test.describe('timing edges', () => {
     expect(snap.clickLog.filter((x) => x.tab === 'Reviews')).toHaveLength(1);
   });
 
-  test('F3a late banner after meta must not be called clean', async ({ page }) => {
-    await boot(page, { flagged: true, entriesDelayMs: 1000, metaDelayMs: 1000, bannerDelayMs: 2500 });
-    const snap = await settle(page, 3500);
+  // Field observation (2026-07): the "Reviews aren't verified" marker and the
+  // removal banner are mutually exclusive — flagged venues never show the
+  // marker. The old F3a scenario (marker present, banner arriving later) does
+  // not occur on real Maps, so the marker now grants a fast clean verdict.
+  test('F3a marker-present clean venue verdicts fast and switches back quickly', async ({ page }) => {
+    await boot(page, { metaDelayMs: 300, entriesDelayMs: 300 });
+    const snap = await settle(page, 1700);
     if (process.env.DUMP_LOGS) console.log('\nF3a LOGS\n' + snap.rrLogs.join('\n'));
-    expect(await page.getByText('2 to 5 reviews removed due to defamation complaints', { exact: true }).count()).toBe(0);
+    expect(snap.badges[0]?.kind).toBe('clean');
+    expect(snap.selected).toBe('Overview');
+    expect(extensionActivations(snap).map((x) => x.tab)).toEqual(['Reviews', 'Overview']);
+  });
+
+  test('F3c a banner seen later overrides a cached clean verdict', async ({ page }) => {
+    await boot(page, { metaDelayMs: 0, entriesDelayMs: 0 });
+    let snap = await settle(page, 2500);
+    expect(snap.badges[0]?.kind).toBe('clean'); // clean verdict cached
+    // The user opens Reviews later and the venue now shows the removal
+    // banner (defense in depth if marker/banner exclusivity is ever wrong).
+    await page.evaluate(() => window.__maps.venue('Test_Venue', {
+      name: 'Test Venue', flagged: true, bannerDelayMs: 0, initialTab: 'Reviews',
+    }));
+    snap = await settle(page, 1500);
     expect(snap.badges[0]?.kind).toBe('adjusted');
   });
 
