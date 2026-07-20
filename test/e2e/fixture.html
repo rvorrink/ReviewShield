@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fake Maps</title>
+  <style>
+    body { margin: 0; font: 14px Arial, sans-serif; color: #202124; }
+    #panels { position: relative; width: 480px; min-height: 700px; }
+    [role=main] { width: 440px; min-height: 560px; margin: 12px; padding: 12px; border: 1px solid #ddd; background: white; }
+    h1 { margin: 10px 20px; }
+    .header { box-sizing: border-box; width: 100%; padding: 14px 20px; }
+    .rating-row { display: flex; gap: 10px; align-items: center; min-height: 35px; }
+    [role=tablist] { display: flex; gap: 6px; min-height: 42px; margin: 8px 0; }
+    [role=tab] { min-width: 100px; min-height: 36px; }
+    .surface { min-height: 180px; padding: 12px; }
+    .surface > * { min-height: 20px; margin: 8px 0; }
+    .reviewer-decoy { margin-bottom: 210px; }
+  </style>
+</head>
+<body><div id="panels"></div>
+<script>
+(() => {
+  const state = {
+    venues: new Map(), current: null, selected: 'Overview',
+    log: [], clickLog: [], maxBadges: 0, errors: [], userClick: false,
+    swallow: { Overview: 0, Reviews: 0, About: 0 }, replaceOn: null,
+    panelSwapDelayMs: 0, staleMs: 0, hiddenStale: false,
+  };
+  const panels = document.querySelector('#panels');
+  const now = () => Date.now();
+  const labels = (lang) => lang === 'de'
+    ? { overview: 'Übersicht', reviews: 'Rezensionen', about: 'Info', meta: 'Rezensionen werden nicht überprüft', stars: 'Sterne', count: 'Rezensionen' }
+    : { overview: 'Overview', reviews: 'Reviews', about: 'About', meta: "Reviews aren't verified", stars: 'stars', count: 'reviews' };
+  const canonical = (text) => /Review|Rezension/i.test(text) ? 'Reviews' : /About|Info/i.test(text) ? 'About' : 'Overview';
+
+  function recordBadgeCount() {
+    state.maxBadges = Math.max(state.maxBadges, document.querySelectorAll('.realreview-badge').length);
+  }
+  new MutationObserver(recordBadgeCount).observe(document.documentElement, { childList: true, subtree: true });
+  addEventListener('error', (e) => state.errors.push(String(e.error || e.message)));
+  addEventListener('unhandledrejection', (e) => state.errors.push(String(e.reason)));
+
+  function config(raw = {}) {
+    return Object.assign({
+      name: 'Test Venue', rating: '4.6', count: '3,270', flagged: false,
+      lang: 'en', initialTab: 'Overview', hasReviewsTab: true,
+      metaDelayMs: 500, entriesDelayMs: 300, bannerDelayMs: 800,
+      bannerText: null, overviewSnippets: true, reviewerDecoy: false,
+    }, raw);
+  }
+
+  function makePanel(slug, venue) {
+    const l = labels(venue.lang);
+    const main = document.createElement('div');
+    main.setAttribute('role', 'main');
+    main.setAttribute('aria-label', venue.name);
+    main.dataset.slug = slug;
+    const h1 = document.createElement('h1'); h1.textContent = venue.name; main.append(h1);
+    if (venue.reviewerDecoy) {
+      const decoy = document.createElement('div'); decoy.className = 'reviewer-decoy';
+      decoy.textContent = venue.lang === 'de' ? '2 Rezensionen' : '2 reviews'; main.append(decoy);
+    }
+    const header = document.createElement('div'); header.className = 'header';
+    const row = document.createElement('div'); row.className = 'rating-row';
+    const rating = document.createElement('span'); rating.textContent = venue.rating; row.append(rating);
+    const stars = document.createElement('span'); stars.setAttribute('aria-label', venue.rating + ' ' + l.stars); stars.textContent = '★★★★★'; row.append(stars);
+    const count = document.createElement('span'); count.textContent = '(' + venue.count + ')'; count.setAttribute('aria-label', venue.count + ' ' + l.count); row.append(count);
+    header.append(row); main.append(header);
+    buildTabs(main, slug, venue, venue.initialTab);
+    return main;
+  }
+
+  function buildTabs(main, slug, venue, selected) {
+    main.querySelector('[role=tablist]')?.remove();
+    main.querySelector('.surface')?.remove();
+    const l = labels(venue.lang);
+    const list = document.createElement('div'); list.setAttribute('role', 'tablist');
+    const defs = [[l.overview, 'Overview'], [l.reviews, 'Reviews'], [l.about, 'About']];
+    for (const [visible, kind] of defs) {
+      if (kind === 'Reviews' && !venue.hasReviewsTab) continue;
+      const button = document.createElement('button');
+      button.setAttribute('role', 'tab'); button.textContent = visible;
+      button.setAttribute('aria-label', kind === 'Reviews' ? visible + (venue.lang === 'de' ? ' für ' : ' for ') + venue.name : visible);
+      button.setAttribute('aria-selected', String(kind === selected));
+      button.addEventListener('click', (event) => activate(main, slug, venue, kind, event));
+      list.append(button);
+    }
+    main.append(list);
+    const surface = document.createElement('div'); surface.className = 'surface'; main.append(surface);
+    renderSurface(main, venue, selected);
+  }
+
+  function activate(main, slug, venue, kind, event) {
+    const cause = state.userClick || (event && event.isTrusted) ? 'user' : 'extension';
+    state.userClick = false;
+    state.clickLog.push({ at: now(), tab: kind, cause, swallowed: state.swallow[kind] > 0, slug });
+    if (state.swallow[kind] > 0) { state.swallow[kind]--; return; }
+    state.selected = kind;
+    for (const tab of main.querySelectorAll('[role=tab]')) tab.setAttribute('aria-selected', String(canonical(tab.textContent) === kind));
+    main.querySelector('.surface').replaceChildren();
+    state.log.push({ at: now(), tab: kind, cause, slug });
+    renderSurface(main, venue, kind);
+    if (state.replaceOn === kind.toLowerCase() + '-selected') buildTabs(main, slug, venue, kind);
+  }
+
+  function renderSurface(main, venue, kind) {
+    const surface = main.querySelector('.surface');
+    if (!surface) return;
+    surface.dataset.kind = kind;
+    if (kind === 'Overview') {
+      if (venue.overviewSnippets) for (let i = 0; i < 2; i++) {
+        const snippet = document.createElement('div'); snippet.setAttribute('aria-label', '5 ' + labels(venue.lang).stars); snippet.textContent = 'Overview snippet'; surface.append(snippet);
+      }
+      return;
+    }
+    if (kind !== 'Reviews') { const about = document.createElement('div'); about.textContent = 'About this venue'; surface.append(about); return; }
+    const add = (delay, fn) => {
+      if (delay !== null && delay !== false) {
+        setTimeout(() => {
+          if (surface.isConnected && surface.dataset.kind === 'Reviews') fn();
+        }, delay);
+      }
+    };
+    add(venue.entriesDelayMs, () => { for (let i = 0; i < 2; i++) { const entry = document.createElement('div'); entry.setAttribute('aria-label', (i ? '1 ' : '5 ') + labels(venue.lang).stars); entry.textContent = 'Review entry'; surface.append(entry); } });
+    add(venue.metaDelayMs, () => { const meta = document.createElement('div'); meta.textContent = labels(venue.lang).meta; surface.append(meta); });
+    if (venue.flagged) add(venue.bannerDelayMs, () => { const banner = document.createElement('div'); banner.textContent = venue.bannerText || (venue.lang === 'de' ? 'Es wurden 2 bis 5 Bewertungen aufgrund von Beschwerden wegen Diffamierung entfernt' : '2 to 5 reviews removed due to defamation complaints'); surface.append(banner); });
+  }
+
+  function show(slug, venue, options = {}) {
+    const old = [...panels.children];
+    const main = makePanel(slug, venue);
+    const swap = () => {
+      panels.append(main); state.current = slug; state.selected = venue.initialTab;
+      if (!options.keepOld) old.forEach((el) => el.remove());
+      else setTimeout(() => old.forEach((el) => el.remove()), options.keepOld);
+      if (options.hideOld) old.forEach((el) => el.style.display = 'none');
+    };
+    if (options.delay) setTimeout(swap, options.delay); else swap();
+  }
+
+  window.__maps = {
+    venue(slug, raw) { const venue = config(raw); state.venues.set(slug, venue); show(slug, venue); },
+    navigate(slug, raw) {
+      if (raw) state.venues.set(slug, config(raw));
+      const venue = state.venues.get(slug); if (!venue) throw new Error('Unknown venue ' + slug);
+      history.pushState({}, '', '/maps/place/' + encodeURIComponent(slug));
+      show(slug, venue, { delay: state.panelSwapDelayMs, keepOld: state.staleMs, hideOld: state.hiddenStale });
+    },
+    setKnobs(knobs) { Object.assign(state, knobs); },
+    swallowClicks(tab, n) { state.swallow[tab] = n; },
+    replaceTabsOn(event) { state.replaceOn = event; },
+    keepStalePanel(ms, hidden = false) { state.staleMs = ms; state.hiddenStale = hidden; },
+    userClickTab(tab) { const main = [...document.querySelectorAll('[role=main]')].find((el) => getComputedStyle(el).display !== 'none' && el.dataset.slug === state.current); const button = [...main.querySelectorAll('[role=tab]')].find((el) => canonical(el.textContent) === tab); state.userClick = true; button.click(); },
+    removeReviewsTab() { document.querySelector('[role=tab][aria-label^="Reviews"], [role=tab][aria-label^="Rezensionen"]')?.remove(); },
+    removeBadge() { document.querySelector('.realreview-badge')?.remove(); },
+    mutate(n = 1) { for (let i = 0; i < n; i++) { const el = document.createElement('i'); el.textContent = 'noise'; document.body.append(el); el.remove(); } },
+    fireSettings(changes) { window.__storageListener?.(Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, { newValue: v }])) , 'sync'); },
+    snapshot() { return { current: state.current, selected: state.selected, log: state.log.slice(), clickLog: state.clickLog.slice(), maxBadges: state.maxBadges, errors: state.errors.slice(), badges: [...document.querySelectorAll('.realreview-badge')].map((el) => ({ kind: el.dataset.rrKind, key: el.dataset.rrKey, text: el.textContent.trim(), label: el.dataset.rrLabel || '' })) }; },
+    resetLog() { state.log.length = 0; state.clickLog.length = 0; state.maxBadges = document.querySelectorAll('.realreview-badge').length; },
+  };
+})();
+</script>
+</body>
+</html>
