@@ -15,7 +15,7 @@ The extension treats each removed review as having a star value you choose (1 st
 
 Businesses with no reported removals get a small clean bill instead: honesty gets credit.
 
-Note: the disclosure only exists in a place's Reviews tab, so ReviewShield briefly opens that tab to read it, then returns you to where you were. A "Checking review status" indicator is shown while this happens.
+Note: the disclosure only exists in a place's Reviews tab, so ReviewShield briefly opens that tab to read it, then returns you to where you were. A "Checking review status" indicator is shown while this happens. If you click or scroll during the check, ReviewShield immediately backs off and leaves you in control.
 
 PRIVACY
 
@@ -33,7 +33,7 @@ Die Erweiterung behandelt jede entfernte Bewertung so, als hätte sie den von di
 
 Profile ohne gemeldete Löschungen bekommen stattdessen einen kleinen sauberen Vermerk: Ehrlichkeit wird anerkannt.
 
-Hinweis: Die Offenlegung existiert nur im Rezensionen-Tab eines Profils. ReviewShield öffnet diesen Tab deshalb kurz, liest die Angabe und kehrt dann dorthin zurück, wo du warst. Währenddessen wird ein Hinweis "Bewertungsstatus wird geprüft" angezeigt.
+Hinweis: Die Offenlegung existiert nur im Rezensionen-Tab eines Profils. ReviewShield öffnet diesen Tab deshalb kurz, liest die Angabe und kehrt dann dorthin zurück, wo du warst. Währenddessen wird ein Hinweis "Bewertungsstatus wird geprüft" angezeigt. Wenn du während der Prüfung klickst oder scrollst, hält sich ReviewShield sofort zurück und überlässt dir die Kontrolle.
 
 DATENSCHUTZ
 
