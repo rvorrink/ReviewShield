@@ -22,8 +22,11 @@
   const SCAN_DEBOUNCE_MS = 350;
   const RESCAN_INTERVAL_MS = 3000;
 
-  // Flip to true and reload the extension to trace detection in the console.
-  const DEBUG = false;
+  // Off in production. To trace detection in the console, flip to true and
+  // reload the extension. The e2e harness enables it by defining
+  // globalThis.__rrDebug before injecting this script (its assertions anchor
+  // on the log lines), so shipping builds stay silent without breaking tests.
+  const DEBUG = globalThis.__rrDebug === true;
   function debug() {
     if (!DEBUG) return;
     try {
@@ -90,6 +93,20 @@
 
   document.addEventListener('scroll', hideTooltip, { capture: true, passive: true });
 
+  /**
+   * True when the element is actually rendered on screen. Maps keeps previous
+   * venues' panels hidden in the DOM for back-navigation; every detector must
+   * ignore those, or stale tabs/banners/counts leak into the current venue.
+   */
+  function isElementVisible(el) {
+    try {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 1 && rect.height > 1;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /** Stable-ish identifier for the currently open place (URL slug or title). */
   function placeKey() {
     try {
@@ -101,6 +118,125 @@
     return document.title || '';
   }
 
+  /** Letters and digits only, lowercased — immune to punctuation drift
+   *  between URL slugs and displayed titles (apostrophes, commas, spacing). */
+  function normalizeForMatch(s) {
+    return (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  }
+
+  /**
+   * Normalizes a place key for panel-title comparison. Returns null when the
+   * key isn't a comparable venue name (coordinates, plus codes, very short
+   * slugs) — the panel-identity guard is not applicable then.
+   */
+  function normalizedKey(key) {
+    let decoded = key || '';
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch (e) {
+      /* use as-is */
+    }
+    decoded = decoded.replace(/\+/g, ' ').trim();
+    if (!decoded || /°/.test(decoded)) return null; // coordinate-style key
+    const want = normalizeForMatch(decoded);
+    return want.length < 4 ? null : want; // too short to compare meaningfully
+  }
+
+  /**
+   * The visible place panel whose title matches the given place key, or null.
+   * Maps keeps previous venues' panels in the DOM (sometimes still visible
+   * during SPA transitions); every detector must run inside the panel that
+   * belongs to the current place, or stale tabs/banners/counts leak in.
+   */
+  function findCurrentMain(key) {
+    const want = normalizedKey(key);
+    if (!want) return null;
+    const matches = (raw) => {
+      const got = normalizeForMatch(raw);
+      return !!got && (got === want || got.includes(want) || want.includes(got));
+    };
+    try {
+      // Primary anchor: the place panel's role="main" container carries the
+      // venue name as its aria-label. (Some Maps variants render titles with
+      // no h1/heading semantics at all, so this must come first.)
+      for (const main of document.querySelectorAll('[role="main"]')) {
+        if (!isElementVisible(main)) continue;
+        if (matches(main.getAttribute('aria-label'))) return main;
+      }
+      // Fallback: a visible title heading, for layouts that have one.
+      for (const h1 of document.querySelectorAll('[role="main"] h1')) {
+        if (!isElementVisible(h1)) continue;
+        if (matches(h1.textContent)) return h1.closest('[role="main"]');
+      }
+    } catch (e) {
+      return null;
+    }
+    // No visible matching title: still transitioning (or a stale panel).
+    return null;
+  }
+
+  /**
+   * True when a visible place panel's title matches the given place key.
+   * Opts out (true) for keys that aren't venue names.
+   */
+  function panelMatchesKey(key) {
+    if (normalizedKey(key) === null) return true; // guard not applicable
+    return !!findCurrentMain(key);
+  }
+
+  /**
+   * The element all detection runs inside: the key-matching visible panel
+   * when one exists, otherwise the first VISIBLE panel (hidden back-nav
+   * panels must never win), otherwise the whole body.
+   */
+  function detectionRoot(key) {
+    const matching = findCurrentMain(key);
+    if (matching) return matching;
+    try {
+      for (const el of document.querySelectorAll('[role="main"]')) {
+        if (isElementVisible(el)) return el;
+      }
+    } catch (e) {
+      /* fall through */
+    }
+    return document.body;
+  }
+
+  /** Debug aid: where does this layout put the venue title? */
+  function dumpHeadings() {
+    try {
+      const mains = [];
+      for (const el of document.querySelectorAll('[role="main"]')) {
+        if (mains.length >= 6) break;
+        mains.push({
+          label: (el.getAttribute('aria-label') || '').slice(0, 60),
+          visible: isElementVisible(el),
+        });
+      }
+      debug('mains:', JSON.stringify(mains));
+      const out = [];
+      for (const el of document.querySelectorAll('h1, [role="heading"]')) {
+        if (out.length >= 10) break;
+        out.push({
+          text: (el.textContent || '').trim().slice(0, 60),
+          visible: isElementVisible(el),
+          inMain: !!el.closest('[role="main"]'),
+        });
+      }
+      debug('headings:', JSON.stringify(out));
+    } catch (e) {
+      /* silent */
+    }
+  }
+
+  // Transition guard bookkeeping: a panel/key mismatch is only trusted for a
+  // short window. Real SPA transitions resolve within a couple of seconds; a
+  // mismatch that persists longer means the guard misjudged the layout, and
+  // detection proceeds without it rather than going permanently silent.
+  const PANEL_MISMATCH_GRACE_MS = 2500;
+  let panelMismatchKey = null;
+  let panelMismatchSince = 0;
+
   /**
    * Finds the defamation banner. Cheap first pass: XPath text search for the
    * language-independent keywords; then climb a few ancestors until the full
@@ -110,15 +246,18 @@
    * { el, text, range: null } when the banner phrase is present but the range
    * could not be parsed (so callers never mistake it for a clean profile),
    * or null when no banner exists at all.
+   *
+   * `root` scopes the search to the current place's panel so a stale
+   * still-visible panel's banner can't be attributed to another venue.
    */
-  function findBanner() {
+  function findBanner(root) {
     let unparsed = null;
     for (const keyword of CFG.BANNER_KEYWORDS) {
       let snapshot;
       try {
         snapshot = document.evaluate(
-          '//*[text()[contains(., "' + keyword + '")]]',
-          document.body,
+          './/*[text()[contains(., "' + keyword + '")]]',
+          root || document.body,
           null,
           XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
           null
@@ -129,8 +268,10 @@
       for (let i = 0; i < snapshot.snapshotLength; i++) {
         let el = snapshot.snapshotItem(i);
         if (!el || !el.closest) continue;
-        // Ignore our own badge and tooltip — their text mentions the keywords.
+        // Ignore our own badge and tooltip — their text mentions the keywords —
+        // and anything in a hidden (stale) panel.
         if (el.closest('.' + BADGE_CLASS) || el.closest('.realreview-tooltip')) continue;
+        if (!isElementVisible(el)) continue;
         for (let up = 0; el && up < 6; up++, el = el.parentElement) {
           const text = (el.textContent || '').replace(/\s+/g, ' ');
           if (!P.matchBanner(text)) continue;
@@ -169,7 +310,7 @@
           const text = (el.textContent || '').trim();
           if (text.length > 5 || !CFG.RATING_TEXT.test(text)) continue;
           const parsed = P.parseLocalizedRating(text);
-          if (parsed === null) continue;
+          if (parsed === null || !isElementVisible(el)) continue;
           if (Math.abs(el.getBoundingClientRect().top - fromTop) > 160) continue;
           return { rating: parsed, container: ancestor };
         }
@@ -184,12 +325,14 @@
    * Finds the official rating and total review count in the place panel
    * header, anchored on aria-labels and text patterns only. `bannerEl` may
    * be null (clean profiles without a removal banner).
-   * Returns { rating, count, headerEl } or null.
+   * Returns { rating, count, headerEl } or null. `root` is the current
+   * place's panel (see detectionRoot) — never the first [role="main"] in
+   * the DOM, which can be a hidden stale panel.
    */
-  function findRatingInfo(bannerEl) {
+  function findRatingInfo(bannerEl, root) {
     const main =
       (bannerEl && bannerEl.closest && bannerEl.closest('[role="main"]')) ||
-      document.querySelector('[role="main"]') ||
+      root ||
       document.body;
 
     // 1) Collect total-review-count candidates in document order:
@@ -204,7 +347,7 @@
       const m = label.match(CFG.REVIEW_COUNT_LABEL);
       if (!m) continue;
       const parsed = P.parseLocalizedCount(m[1]);
-      if (parsed) candidates.push({ el, count: parsed });
+      if (parsed && isElementVisible(el)) candidates.push({ el, count: parsed });
     }
     for (const el of main.querySelectorAll('span, div')) {
       if (candidates.length >= 20) break;
@@ -215,7 +358,7 @@
       const m = text.match(CFG.REVIEW_COUNT_LABEL) || text.match(CFG.REVIEW_COUNT_TEXT);
       if (!m) continue;
       const parsed = P.parseLocalizedCount(m[1]);
-      if (parsed) candidates.push({ el, count: parsed });
+      if (parsed && isElementVisible(el)) candidates.push({ el, count: parsed });
     }
     if (!candidates.length) {
       debug('review count not found');
@@ -311,25 +454,121 @@
   // phrases as e.g. "Reviews for Wagners Juicery" / "Rezensionen für …" —
   // hence prefix matching, not full-string equality.
   const REVIEWS_TAB_LABEL = /^\s*(Reviews|Rezensionen)\b/i;
-  const PROBE_TIMEOUT_MS = 5000; // hard ceiling only — verdicts normally come from content signals
+  const PROBE_TIMEOUT_MS = 6000; // base deadline — extends when content arrives late
+  const PROBE_HARD_TIMEOUT_MS = 12000; // absolute ceiling regardless of extensions
   const PROBE_POLL_MS = 200;
-  const CLEAN_GRACE_MS = 400; // reviews list may render a beat before the disclosure header
+  // The reviews list — and even the banner region's marker line ("Reviews
+  // aren't verified") — can render well before the disclosure banner itself
+  // (observed: banner more than 1s after the marker). A clean verdict
+  // therefore always waits a full banner-arrival grace after the surface
+  // loads; the marker is only a "surface has rendered" signal, never proof
+  // that no banner is coming.
+  const CLEAN_GRACE_MS = 1800;
+  // A failed switch-back (all in-probe retries swallowed) keeps retrying in
+  // the background for a bounded window, driven by the regular scan ticks.
+  const RETURN_RECOVERY_MS = 10000;
+  const RETURN_RETRY_GAP_MS = 800;
+  // An 'unknown' verdict caused by transient click-swallowing (the probe
+  // never reached the Reviews surface) gets one silent re-probe after a
+  // cooldown — SPA transition storms settle within a few seconds.
+  const UNKNOWN_RETRY_COOLDOWN_MS = 4000;
   let probeRunning = false;
+  // Bumped on every settings change: a running probe compares its own
+  // generation against this and cancels itself instead of continuing to
+  // flip tabs under settings (or an extension state) that no longer apply.
+  let probeGeneration = 0;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  function findTabButton(labelRe) {
-    for (const el of document.querySelectorAll('[role="tab"], [role="tablist"] button')) {
-      if (el.closest('.' + BADGE_CLASS)) continue;
-      const text = (el.textContent || '').trim();
-      const aria = (el.getAttribute('aria-label') || '').trim();
-      if (labelRe.test(text) || labelRe.test(aria)) return el;
+  // ------------------------------------------------- switch-back recovery
+  // When every in-probe switch-back attempt is swallowed, the return to the
+  // user's tab is handed to this bounded background recovery instead of
+  // stranding them on Reviews. Any trusted user input cancels it — a user
+  // who meanwhile started reading reviews is never yanked away. (Our own
+  // programmatic clicks are untrusted and can't cancel it.)
+
+  let pendingReturn = null; // { key, generation, resolveBack, until, lastAttempt, registeredAt }
+  let lastUserInputAt = 0;
+
+  function noteUserInput(e) {
+    if (!e.isTrusted) return;
+    lastUserInputAt = Date.now();
+    if (pendingReturn) {
+      debug('recovery: user input, cancelling pending switch-back');
+      pendingReturn = null;
+    }
+  }
+  document.addEventListener('pointerdown', noteUserInput, { capture: true, passive: true });
+  document.addEventListener('keydown', noteUserInput, { capture: true, passive: true });
+  document.addEventListener('wheel', noteUserInput, { capture: true, passive: true });
+
+  /** Called from scan(): retries a registered switch-back until it takes
+   *  effect, the user acts, the place/settings change, or the window ends. */
+  function tryPendingReturn() {
+    if (!pendingReturn) return;
+    const pr = pendingReturn;
+    if (
+      pr.generation !== probeGeneration ||
+      placeKey() !== pr.key ||
+      Date.now() > pr.until ||
+      lastUserInputAt > pr.registeredAt
+    ) {
+      pendingReturn = null;
+      return;
+    }
+    if (!reviewsTabSelected(detectionRoot(pr.key))) {
+      pendingReturn = null; // switch-back took effect (or the user moved on)
+      return;
+    }
+    // Self-driving: as long as a return is pending, keep a scan scheduled so
+    // recovery isn't at the mercy of the slow rescan interval.
+    scheduleScan();
+    if (probeRunning) return;
+    if (Date.now() - pr.lastAttempt < RETURN_RETRY_GAP_MS) return;
+    pr.lastAttempt = Date.now();
+    const back = pr.resolveBack();
+    if (back) {
+      debug('recovery: retrying switch-back');
+      back.click();
+    }
+  }
+
+  /**
+   * Tab lookups are scoped to the current place's panel (`root`) so a stale
+   * panel's tablist can't be clicked. Falls back to a document-wide search
+   * only when the scoped search finds nothing (layouts whose tablist lives
+   * outside the panel).
+   */
+  function findTabButton(labelRe, root) {
+    const scopes = root && root !== document.body ? [root, document] : [document];
+    for (const scope of scopes) {
+      for (const el of scope.querySelectorAll('[role="tab"], [role="tablist"] button')) {
+        if (el.closest('.' + BADGE_CLASS) || !isElementVisible(el)) continue;
+        const text = (el.textContent || '').trim();
+        const aria = (el.getAttribute('aria-label') || '').trim();
+        if (labelRe.test(text) || labelRe.test(aria)) return el;
+      }
     }
     return null;
   }
 
-  function selectedTabButton() {
-    return document.querySelector('[role="tab"][aria-selected="true"]');
+  function selectedTabButton(root) {
+    const scopes = root && root !== document.body ? [root, document] : [document];
+    for (const scope of scopes) {
+      for (const el of scope.querySelectorAll('[role="tab"][aria-selected="true"]')) {
+        if (isElementVisible(el)) return el;
+      }
+    }
+    return null;
+  }
+
+  /** True while the Reviews tab is verifiably the selected tab. */
+  function reviewsTabSelected(root) {
+    const sel = selectedTabButton(root);
+    if (!sel) return false;
+    const text = (sel.textContent || '').trim();
+    const aria = (sel.getAttribute('aria-label') || '').trim();
+    return REVIEWS_TAB_LABEL.test(text) || REVIEWS_TAB_LABEL.test(aria);
   }
 
   /**
@@ -338,21 +577,49 @@
    * external reviews with numeric score chips ("4/5", "Rated 4.0 out of 5"),
    * which also appear as visible leaf text — check both shapes.
    */
-  function reviewsContentLoaded() {
+  function reviewsContentLoaded(root) {
+    root = root || document.body;
     let found = 0;
-    for (const el of document.querySelectorAll('[aria-label]')) {
+    for (const el of root.querySelectorAll('[aria-label]')) {
       if (el.closest('.' + BADGE_CLASS)) continue;
       const label = el.getAttribute('aria-label') || '';
       if (CFG.REVIEW_ITEM_STARS.test(label) || CFG.REVIEW_ITEM_SCORE.test(label)) {
-        if (++found >= 3) return true;
+        if (isElementVisible(el) && ++found >= 2) return true;
       }
     }
-    for (const el of document.querySelectorAll('span, div')) {
+    for (const el of root.querySelectorAll('span, div')) {
       if (el.childElementCount !== 0 || el.closest('.' + BADGE_CLASS)) continue;
       const text = (el.textContent || '').trim();
       if (!text || text.length > 30) continue;
       if (CFG.REVIEW_ITEM_SCORE.test(text)) {
-        if (++found >= 3) return true;
+        if (isElementVisible(el) && ++found >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  /** True once the "Reviews aren't verified" header line has rendered —
+   *  it lives in the same block as the disclosure banner. */
+  function reviewsMetaVisible(root) {
+    for (const keyword of CFG.REVIEWS_META_KEYWORDS) {
+      let snapshot;
+      try {
+        snapshot = document.evaluate(
+          './/*[text()[contains(., "' + keyword + '")]]',
+          root || document.body,
+          null,
+          XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+          null
+        );
+      } catch (e) {
+        continue;
+      }
+      const limit = Math.min(snapshot.snapshotLength, 10);
+      for (let i = 0; i < limit; i++) {
+        const el = snapshot.snapshotItem(i);
+        if (el && isElementVisible(el) && CFG.REVIEWS_META_TEXT.test(el.textContent || '')) {
+          return true;
+        }
       }
     }
     return false;
@@ -361,68 +628,243 @@
   /**
    * Polls the DOM until a verdict emerges:
    * - banner found → flagged (or unknown if its range doesn't parse)
-   * - reviews list rendered + short grace period without a banner → clean
+   * - Reviews tab VERIFIABLY SELECTED + surface rendered (entries or the
+   *   banner-region marker) + full banner-arrival grace → clean
    * - user navigated to another place → aborted
-   * - timeout without the list ever rendering → unknown (never guess clean)
+   * - timeout without a confident signal → unknown (never guess clean)
+   *
+   * The tab-selected requirement is load-bearing: during page transitions a
+   * tab click can be swallowed, and the Overview's own review snippets carry
+   * "5 stars" labels that would otherwise satisfy the content signal on the
+   * wrong surface. If the tab isn't selected, the click is retried a few
+   * times and all clean-signals are discarded.
    */
-  async function pollForBanner(key) {
-    const deadline = Date.now() + PROBE_TIMEOUT_MS;
+  async function pollForBanner(key, probeState) {
+    const startedAt = Date.now();
+    const hardDeadline = startedAt + PROBE_HARD_TIMEOUT_MS;
+    let deadline = startedAt + PROBE_TIMEOUT_MS;
     let contentLoadedAt = 0;
+    let panelMismatchAt = 0;
     while (Date.now() < deadline) {
+      if (probeState.generation !== probeGeneration) return { status: 'cancelled' };
       if (placeKey() !== key) return { status: 'aborted' };
-      const banner = findBanner();
+      // A still-visible previous panel must not feed signals for this venue —
+      // but only within the grace window; a persistent mismatch means the
+      // guard misjudged the layout and the probe proceeds without it.
+      if (!panelMatchesKey(key)) {
+        if (!panelMismatchAt) panelMismatchAt = Date.now();
+        if (Date.now() - panelMismatchAt < PANEL_MISMATCH_GRACE_MS) {
+          contentLoadedAt = 0;
+          await sleep(PROBE_POLL_MS);
+          continue;
+        }
+      } else {
+        panelMismatchAt = 0;
+      }
+      // Panels can swap mid-probe; resolve the current place's panel fresh
+      // every iteration so no signal is ever read from a stale one.
+      const root = detectionRoot(key);
+      const banner = findBanner(root);
       if (banner) {
+        debug('probe: banner found after', Date.now() - startedAt, 'ms');
         return banner.range
           ? { status: 'flagged', range: banner.range }
           : { status: 'unknown' };
       }
-      if (reviewsContentLoaded()) {
-        if (!contentLoadedAt) contentLoadedAt = Date.now();
-        else if (Date.now() - contentLoadedAt >= CLEAN_GRACE_MS) return { status: 'clean' };
+      if (!reviewsTabSelected(root)) {
+        // Once Reviews was verifiably selected, only a user click moves the
+        // selection to another tab (the probe never clicks away while
+        // polling). Yield immediately — never fight the user for the tabs.
+        if (probeState.sawSelected && selectedTabButton(root)) {
+          debug('probe: user switched tabs during probe, yielding');
+          return { status: 'user-nav' };
+        }
+        // Wrong surface: nothing seen here may count toward "clean".
+        contentLoadedAt = 0;
+        if (probeState.reclicks < 3 && Date.now() - startedAt > (probeState.reclicks + 1) * 600) {
+          const tab = findTabButton(REVIEWS_TAB_LABEL, root);
+          if (tab) {
+            debug('probe: reviews tab not selected, re-clicking (attempt', probeState.reclicks + 1 + ')');
+            tab.click();
+          }
+          probeState.reclicks++;
+        }
+      } else {
+        if (!probeState.sawSelected) {
+          probeState.sawSelected = true;
+          debug('probe: reviews tab selected after', Date.now() - startedAt, 'ms');
+        }
+        // Two independent "the reviews surface has rendered" signals: review
+        // entries, and the banner-region marker line (which also covers
+        // venues with fewer reviews than the entries threshold). Either one
+        // only STARTS the clean grace clock — the banner can render later
+        // than both, so clean always waits the full grace.
+        const entriesOk = reviewsContentLoaded(root);
+        const metaOk = reviewsMetaVisible(root);
+        if (entriesOk || metaOk) {
+          if (!contentLoadedAt) {
+            contentLoadedAt = Date.now();
+            debug(
+              'probe: reviews surface loaded after', contentLoadedAt - startedAt,
+              'ms; entries:', entriesOk, 'marker:', metaOk
+            );
+            // Slow loads get their full grace window measured from content
+            // arrival, not from probe start (capped by the hard ceiling).
+            deadline = Math.min(
+              hardDeadline,
+              Math.max(deadline, contentLoadedAt + CLEAN_GRACE_MS + 600)
+            );
+          }
+          const waited = Date.now() - contentLoadedAt;
+          if (waited >= CLEAN_GRACE_MS) {
+            debug(
+              'probe: clean verdict after', Date.now() - startedAt,
+              'ms; banner-region marker:', metaOk
+            );
+            return { status: 'clean' };
+          }
+        }
       }
       await sleep(PROBE_POLL_MS);
     }
-    return contentLoadedAt ? { status: 'clean' } : { status: 'unknown' };
+    debug('probe: timeout; tab selected seen:', probeState.sawSelected, '; content loaded:', !!contentLoadedAt);
+    return { status: 'unknown' };
+  }
+
+  /**
+   * Clicks away from the Reviews tab and VERIFIES the switch took effect,
+   * retrying a few times — a single click can be swallowed while the tab
+   * transition is still settling (same phenomenon as the forward direction).
+   * Yields immediately if the user navigated or is no longer on Reviews.
+   */
+  async function ensureLeftReviewsTab(key, generation, resolveBack) {
+    const startedAt = Date.now();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (generation !== probeGeneration) return; // settings changed: hands off the tabs
+      if (placeKey() !== key) return;
+      if (!reviewsTabSelected(detectionRoot(key))) return;
+      // Reviews still (or again) selected after our click already fired AND
+      // the user has interacted since — they re-selected it deliberately.
+      // Yield instead of fighting them for the tabs.
+      if (attempt > 0 && lastUserInputAt > startedAt) {
+        debug('probe: user input during switch-back, yielding');
+        return;
+      }
+      const back = resolveBack();
+      if (!back) {
+        // Transitions can briefly remove the target tab; recovery below
+        // keeps re-resolving it instead of giving up on the first miss.
+        debug('probe: no tab to switch back to yet');
+        break;
+      }
+      debug('probe: switching back' + (attempt ? ' (retry ' + attempt + ')' : ''));
+      back.click();
+      for (let waited = 0; waited < 600; waited += PROBE_POLL_MS) {
+        await sleep(PROBE_POLL_MS);
+        if (generation !== probeGeneration || placeKey() !== key) return;
+        if (!reviewsTabSelected(detectionRoot(key))) return;
+      }
+    }
+    debug('probe: switch-back did not take effect after retries');
+    if (lastUserInputAt > startedAt) return; // user engaged with Reviews — leave them
+    debug('probe: scheduling switch-back recovery');
+    pendingReturn = {
+      key,
+      generation,
+      resolveBack,
+      until: Date.now() + RETURN_RECOVERY_MS,
+      lastAttempt: Date.now(),
+      registeredAt: Date.now(),
+    };
   }
 
   async function probeReviewsTab(key) {
     if (probeRunning) return;
     probeRunning = true;
+    pendingReturn = null; // a new probe supersedes any older pending switch-back
     let verdict = { status: 'unknown' };
+    const generation = probeGeneration;
+    const probeState = { reclicks: 0, generation, sawSelected: false, tabFound: false };
+    // Statuses after which the probe must NOT touch the tabs again: the user
+    // navigated away / took over, or a settings change cancelled the probe.
+    const handsOff = (status) =>
+      status === 'aborted' || status === 'cancelled' || status === 'user-nav';
     try {
-      const reviewsTab = findTabButton(REVIEWS_TAB_LABEL);
-      const originalTab = selectedTabButton();
+      const root = detectionRoot(key);
+      const reviewsTab = findTabButton(REVIEWS_TAB_LABEL, root);
+      const originalTab = selectedTabButton(root);
+      probeState.tabFound = !!reviewsTab;
 
       if (!reviewsTab) {
         debug('probe: reviews tab not found');
       } else if (reviewsTab === originalTab) {
-        // Already on the Reviews tab — just wait for its content.
-        verdict = await pollForBanner(key);
+        // Reviews tab appears already selected. That is either the user
+        // genuinely sitting on it, or a still-visible previous panel during a
+        // transition. pollForBanner sorts it out (panel-match gating plus
+        // re-clicks); if the probe had to navigate itself, it cleans up by
+        // returning to the tablist's first tab (Overview).
+        verdict = await pollForBanner(key, probeState);
+        if (!handsOff(verdict.status) && probeState.reclicks > 0) {
+          debug('probe: probe navigated itself, returning to first tab');
+          await ensureLeftReviewsTab(key, generation, () => {
+            const sel = selectedTabButton(detectionRoot(key));
+            const tablist = sel && sel.closest('[role="tablist"]');
+            const firstTab = tablist && tablist.querySelector('[role="tab"]');
+            return firstTab && firstTab !== sel && isElementVisible(firstTab) ? firstTab : null;
+          });
+        }
       } else {
         debug('probe: opening reviews tab');
+        // Capture the original tab's visible label (venue-independent, e.g.
+        // "Overview"/"Übersicht"): page transitions can replace the tab
+        // elements, so the element reference alone is not a reliable way back.
+        const originalLabel = originalTab
+          ? (originalTab.textContent || '').trim() ||
+            (originalTab.getAttribute('aria-label') || '').trim()
+          : '';
         reviewsTab.click();
-        verdict = await pollForBanner(key);
-        // Switch back — but only if the user didn't navigate meanwhile.
-        const nowSelected = selectedTabButton();
-        if (
-          verdict.status !== 'aborted' &&
-          originalTab &&
-          originalTab.isConnected &&
-          (nowSelected === reviewsTab || nowSelected === null)
-        ) {
-          originalTab.click();
+        verdict = await pollForBanner(key, probeState);
+        // Switch back unless the user navigated to a different tab themselves
+        // (then the Reviews tab is no longer the selected one and we yield).
+        if (!handsOff(verdict.status) && originalLabel) {
+          await ensureLeftReviewsTab(key, generation, () => {
+            if (originalTab && originalTab.isConnected && isElementVisible(originalTab)) {
+              return originalTab;
+            }
+            const escaped = originalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return findTabButton(new RegExp('^\\s*' + escaped + '\\s*$', 'i'), detectionRoot(key));
+          });
         }
       }
     } catch (e) {
       /* keep unknown */
     }
-    // An aborted probe (or one whose place changed under it) belongs to
-    // nobody — discard it so the new place gets its own probe immediately.
-    if (verdict.status === 'aborted' || placeKey() !== key) {
+    if (verdict.status === 'user-nav') {
+      // The user took over tab navigation mid-probe. Record the venue as
+      // unknown: no badge, and — crucially — no automatic re-probe that
+      // would wrestle the tabs away from them again.
+      verdict = { status: 'unknown' };
+    }
+    if (verdict.status === 'cancelled') {
+      // Settings changed under the probe: the cache was already cleared and
+      // (if still enabled) a fresh probe starts from scan(). This verdict
+      // belongs to the old settings — record nothing.
+      debug('probe cancelled by settings change for', key);
+    } else if (verdict.status === 'aborted' || placeKey() !== key) {
+      // An aborted probe (or one whose place changed under it) belongs to
+      // nobody — discard it so the new place gets its own probe immediately.
       debug('probe aborted: navigated away from', key);
       bannerCache.delete(key);
     } else {
       verdict.ts = Date.now();
+      if (verdict.status === 'unknown') {
+        const prior = bannerCache.get(key);
+        // Retry-eligible: a Reviews tab existed but the probe never
+        // verifiably reached it — the transient click-swallow signature.
+        // `retried` marks the one allowed re-probe as already consumed.
+        verdict.transient = probeState.tabFound && !probeState.sawSelected;
+        verdict.retried = !!(prior && prior.retriedOnce);
+      }
       debug('probe verdict for', key, verdict.status);
       if (bannerCache.size > 200) bannerCache.clear();
       bannerCache.set(key, verdict);
@@ -685,6 +1127,7 @@
 
   function scan() {
     try {
+      tryPendingReturn();
       if (!settings.enabled || !translator) {
         removeBadges();
         return;
@@ -698,8 +1141,26 @@
       }
 
       const key = placeKey();
-      const domBanner = findBanner();
-      const info = findRatingInfo(domBanner ? domBanner.el : null);
+      // During SPA transitions the visible panel may still belong to the
+      // previous venue while the URL already names the new one — don't read
+      // or render anything until they agree (bounded by the grace window).
+      if (!panelMatchesKey(key)) {
+        if (panelMismatchKey !== key) {
+          panelMismatchKey = key;
+          panelMismatchSince = Date.now();
+        }
+        if (Date.now() - panelMismatchSince < PANEL_MISMATCH_GRACE_MS) {
+          debug('panel does not match key yet (transitioning)');
+          return;
+        }
+        if (DEBUG) dumpHeadings();
+        debug('panel mismatch persists, proceeding without the guard');
+      } else {
+        panelMismatchKey = null;
+      }
+      const root = detectionRoot(key);
+      const domBanner = findBanner(root);
+      const info = findRatingInfo(domBanner ? domBanner.el : null, root);
       if (!info) {
         debug('rating/count not found in panel header');
         removeBadges();
@@ -734,9 +1195,24 @@
           flagged = true;
           range = cached.range || null;
         } else if (cached.status !== 'clean') {
-          // unknown (tabs not found / banner unparseable): show nothing.
-          // No automatic retry — the probe visibly flips tabs, so it only
-          // re-runs on navigation or settings changes.
+          // unknown: show nothing. One exception — an unknown that looks
+          // transient (Reviews tab existed but its clicks were swallowed)
+          // gets a single re-probe after a cooldown. Everything else only
+          // re-runs on navigation or settings changes, because the probe
+          // visibly flips tabs.
+          if (
+            cached.status === 'unknown' &&
+            cached.transient &&
+            !cached.retried &&
+            !probeRunning &&
+            Date.now() - (cached.ts || 0) > UNKNOWN_RETRY_COOLDOWN_MS
+          ) {
+            debug('transient unknown verdict, re-probing once');
+            bannerCache.set(key, { status: 'pending', ts: Date.now(), retriedOnce: true });
+            renderCheckingCard(info, key);
+            probeReviewsTab(key);
+            return;
+          }
           removeBadges();
           return;
         }
@@ -859,6 +1335,9 @@
 
   async function applySettings(next) {
     settings = Object.assign({}, CFG.DEFAULT_SETTINGS, next);
+    // Cancel any in-flight probe synchronously: it runs under the old
+    // settings and must not keep flipping tabs (especially after disable).
+    probeGeneration++;
     try {
       translator = await RR.i18n.createTranslator(settings.language);
     } catch (e) {
